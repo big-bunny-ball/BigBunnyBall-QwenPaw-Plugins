@@ -1,31 +1,39 @@
-# Turn Notifications
+# QwenPaw Console Turn Notifications
 
-Show a native system notification when a **QwenPaw console turn completes**.
+Show a native **Windows** toast when a **QwenPaw console turn completes**.
 
-当 **QwenPaw 控制台中的一轮对话完成**时，显示原生系统通知。
+当 **QwenPaw 控制台中的一轮对话完成**时，显示原生 **Windows** 通知。
 
-The notification body is always:
+Version 1 supports **Windows only**. macOS and Linux are not supported and produce no notification.
 
-通知正文始终为：
+v1 版本**仅支持 Windows**。macOS 和 Linux 暂不支持，也不会产生任何通知。
+
+The notification text is always:
+
+通知文本始终为：
 
 > QwenPaw has completed the turn.
 
-There is no response preview, session label, plugin settings page, console button or permission prompt. Enabling and disabling the plugin is done exclusively on QwenPaw's plugin page. No additional model inference or remote service is used.
+There is no browser notification, no permission prompt, no console UI, no settings page and no session label. Enabling and disabling the plugin is done exclusively on QwenPaw's plugin page.
 
-不包含回复预览、会话标签、插件设置页面、控制台按钮或权限请求弹窗。只能在 QwenPaw 的插件页面启用或停用此插件。不会进行额外的模型推理，也不会使用远程服务。
+不使用浏览器通知、不弹出权限请求、不添加控制台界面、不提供设置页面，也不显示会话标签。只能在 QwenPaw 的插件页面启用或停用此插件。
+
+Because the toast is raised by Windows itself, it appears even when no console tab is open and even when the browser is closed.
+
+由于通知由 Windows 系统自身发出，因此即使没有打开控制台标签页、甚至浏览器已关闭，通知依然会显示。
 
 ## Requirements / 使用要求
 
+- Windows 10 or Windows 11.
+- Windows 10 或 Windows 11。
 - QwenPaw **2.2.2 or later in the 2.2.x series**; tested on **2.2.2.post1**.
 - QwenPaw **2.2.x 系列中的 2.2.2 或更高版本**；已在 **2.2.2.post1** 上测试。
-- A desktop browser with Notification API support.
-- 支持 Notification API 的桌面浏览器。
-- At least one QwenPaw console tab left open. A closed browser cannot receive completion signals.
-- 至少保留一个打开的 QwenPaw 控制台标签页。浏览器关闭后无法接收完成信号。
-- Notification permission granted to the QwenPaw console origin in the browser's site settings.
-- 在浏览器的网站设置中，允许 QwenPaw 控制台来源发送通知。
-- On Windows, notifications enabled for the browser in **Settings → System → Notifications**. Focus Assist / Do Not Disturb may hide banners.
-- 在 Windows 的**设置 → 系统 → 通知**中为浏览器启用通知。专注助手或“勿扰”模式可能会隐藏通知横幅。
+- Windows notifications enabled, and Focus Assist / Do Not Disturb in a state that allows banners.
+- 已启用 Windows 通知，且专注助手或“勿扰”模式处于允许显示通知横幅的状态。
+
+No Python dependency is installed and no network access is used.
+
+不会安装额外的 Python 依赖，也不会使用网络访问。
 
 ## Install / 安装
 
@@ -42,63 +50,45 @@ Alternatively, install the release ZIP:
 也可以安装发布版 ZIP：
 
 ```bat
-qwenpaw plugin install path\to\turn-notifications-v0.1.0.zip
+qwenpaw plugin install path\to\qwenpaw-console-turn-notifications-v0.1.0.zip
 ```
 
-Reload the console after installation. The ZIP has `plugin.json` at its root; do not unzip it into an additional nested directory.
+The ZIP has `plugin.json` at its root; do not unzip it into an additional nested directory.
 
-安装后重新加载控制台。ZIP 根目录中包含 `plugin.json`；解压后不要再额外套一层同名目录。
+ZIP 根目录中包含 `plugin.json`；解压后不要再额外套一层同名目录。
 
 ## Use / 使用方法
 
-1. Enable **Turn Notifications** on the QwenPaw plugin page.
-1. 在 QwenPaw 插件页面启用 **Turn Notifications**。
+1. Enable **QwenPaw Console Turn Notifications** on the QwenPaw plugin page.
+1. 在 QwenPaw 插件页面启用 **QwenPaw Console Turn Notifications**。
 
-2. Open or reload the console and log in normally.
-2. 打开或重新加载控制台，并正常登录。
+2. Complete a turn in the QwenPaw console.
+2. 在 QwenPaw 控制台中完成一轮对话。
 
-3. Allow notifications for the console origin in the browser's site settings. The plugin never requests permission itself.
-3. 在浏览器的网站设置中允许控制台来源发送通知。插件本身不会主动请求权限。
+3. A Windows toast appears in the bottom-right corner with the title **QwenPaw** and the text **“QwenPaw has completed the turn.”**
+3. Windows 右下角会弹出一条通知，标题为 **QwenPaw**，正文为 **“QwenPaw has completed the turn.”**。
 
-4. Complete a turn while the console is in the background or another application is focused. The browser displays **“QwenPaw has completed the turn.”**
-4. 在控制台位于后台或焦点位于其他应用时完成一轮对话。浏览器会显示 **“QwenPaw has completed the turn.”**。
+If no toast appears, check Windows **Settings → System → Notifications**, confirm notifications are on and Focus Assist is not silencing them, then complete another turn.
 
-5. Click the notification to focus the console.
-5. 点击通知即可将焦点切换到控制台。
-
-If no notification appears, check the console origin's notification permission and Windows notification settings, including Focus Assist / Do Not Disturb. Then reload the console and complete another turn.
-
-如果没有显示通知，请检查控制台来源的通知权限以及 Windows 通知设置，包括专注助手或“勿扰”模式。然后重新加载控制台，再完成一轮对话。
+如果没有看到通知，请检查 Windows 的**设置 → 系统 → 通知**，确认通知已开启且专注助手未将其静音，然后再次完成一轮对话。
 
 ## Behaviour and limits / 行为与限制
 
-The plugin uses QwenPaw's `POST_RESPONSE` lifecycle hook for successful console turns. Non-console channels and turns with an error do not notify.
+The plugin uses QwenPaw's `POST_RESPONSE` lifecycle hook. Only successful console turns notify; other channels and turns that ended with an error stay silent.
 
-插件使用 QwenPaw 的 `POST_RESPONSE` 生命周期钩子检测成功完成的控制台对话。非控制台渠道和发生错误的对话不会触发通知。
+插件使用 QwenPaw 的 `POST_RESPONSE` 生命周期钩子。只有成功完成的控制台对话才会通知；其他渠道以及以错误结束的对话不会通知。
 
-The frontend uses the console Host SDK's `getApiUrl()` and `getApiToken()` helpers to consume the authenticated `/api/turn-notifications/events` server-sent event stream.
+Each completed turn shows one toast. The toast is raised through Windows WinRT using a dedicated application identity, so it is labelled **QwenPaw** rather than another program.
 
-前端使用控制台 Host SDK 的 `getApiUrl()` 和 `getApiToken()` 辅助方法，接收经过身份验证的 `/api/turn-notifications/events` 服务器发送事件流。
+每完成一轮对话会显示一条通知。通知通过 Windows WinRT 以专属应用标识发出，因此显示为 **QwenPaw**，而不是其他程序的名称。
 
-A notification is shown only when the console tab is hidden or unfocused. It is suppressed while that tab is visible and focused.
+No response text is read, stored or transmitted. The plugin never inspects the reply, only that a turn finished successfully.
 
-仅在控制台标签页隐藏或失去焦点时显示通知。当该标签页可见且处于焦点状态时，不显示通知。
+不会读取、保存或传输回复正文。插件不会检查回复内容，只判断一轮对话是否成功结束。
 
-Multiple open console tabs may each display the same completion. This simple version does not coordinate claims across tabs.
+Toast display ultimately depends on Windows notification settings. Presentation mode, Focus Assist, fullscreen games and notification volume can suppress banners.
 
-多个打开的控制台标签页可能分别显示同一完成通知。此简化版本不会在标签页之间协调通知归属。
-
-The listener reconnects after a dropped stream. Events missed while disconnected are not replayed.
-
-事件流断开后，监听器会自动重新连接。断开期间错过的事件不会重播。
-
-No response text is read, collected or sent to the browser. No completion history or response content is persisted.
-
-不会读取、收集或向浏览器发送回复正文。不会持久化保存完成历史或回复内容。
-
-Browser and Windows policies ultimately control banner display. Sleep, browser suspension or closing the console can prevent delivery.
-
-通知横幅最终由浏览器和 Windows 的策略控制。系统睡眠、浏览器挂起或关闭控制台都可能导致通知无法送达。
+通知是否显示最终取决于 Windows 的通知设置。演示模式、专注助手、全屏游戏和通知数量限制都可能抑制横幅显示。
 
 ## Development / 开发
 
@@ -112,8 +102,6 @@ From the monorepo root, run the following checks:
 
 ```bat
 "%USERPROFILE%\.qwenpaw\venv\Scripts\python.exe" -m unittest discover -s qwenpaw-console-turn-notifications/tests -p "test_*.py" -v
-node --test qwenpaw-console-turn-notifications/tests/frontend.test.cjs
-node --check qwenpaw-console-turn-notifications/web/index.js
 qwenpaw plugin validate qwenpaw-console-turn-notifications
 ```
 
@@ -125,9 +113,9 @@ Build the deterministic release archive with the following command:
 python tools\package_plugin.py qwenpaw-console-turn-notifications
 ```
 
-The archive is written to `dist/turn-notifications-v0.1.0.zip`, contains `plugin.json` at its root, excludes development files and is checked against the 10 MB limit.
+The archive is written to `dist/qwenpaw-console-turn-notifications-v0.1.0.zip`, contains `plugin.json` at its root, excludes development files and is checked against the 10 MB limit.
 
-归档将生成至 `dist/turn-notifications-v0.1.0.zip`，根目录包含 `plugin.json`，不包含开发文件，并会检查是否超过 10 MB 限制。
+归档将生成至 `dist/qwenpaw-console-turn-notifications-v0.1.0.zip`，根目录包含 `plugin.json`，不包含开发文件，并会检查是否超过 10 MB 限制。
 
 ## Uninstall / 卸载
 
@@ -136,12 +124,12 @@ Run the following command to uninstall the plugin:
 运行以下命令卸载插件：
 
 ```bat
-qwenpaw plugin uninstall turn-notifications
+qwenpaw plugin uninstall qwenpaw-console-turn-notifications
 ```
 
-Reload open console tabs afterwards. Uninstalling does not change browser or Windows notification settings.
+Uninstalling does not change any Windows notification setting.
 
-卸载后重新加载已打开的控制台标签页。卸载不会更改浏览器或 Windows 的通知设置。
+卸载不会更改任何 Windows 通知设置。
 
 ## Licence / 许可证
 

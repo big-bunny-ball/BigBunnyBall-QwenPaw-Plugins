@@ -1,14 +1,13 @@
 {
-  "id": "turn-notifications",
-  "name": "Turn Notifications",
+  "id": "qwenpaw-console-turn-notifications",
+  "name": "QwenPaw Console Turn Notifications",
   "version": "0.1.0",
   "type": "general",
-  "description": "Native system notifications for completed QwenPaw console turns. Fixed text: “QwenPaw has completed the turn.”\n\nQwenPaw 控制台对话完成时显示原生系统通知。固定通知文本：“QwenPaw has completed the turn.”",
+  "description": "Native Windows toast notifications for completed QwenPaw console turns. Fixed text: “QwenPaw has completed the turn.” Windows only (v1). No browser notification, no console UI and no response content storage.\n\nQwenPaw 控制台对话完成时显示原生 Windows 通知。固定文本：“QwenPaw has completed the turn.” 仅支持 Windows（v1）。不使用浏览器通知，不添加控制台界面，也不保存回复内容。",
   "author": "BigBunnyBall大兔子球",
   "license": "Apache-2.0",
   "entry": {
-    "backend": "plugin.py",
-    "frontend": "web/index.js"
+    "backend": "plugin.py"
   },
   "dependencies": [],
   "qwenpaw_version": {

@@ -6,7 +6,7 @@ Community plugins for [QwenPaw](https://qwenpaw.agentscope.io/), developed again
 
 | Directory | Plugin ID | Version | Purpose |
 | --- | --- | --- | --- |
-| [`qwenpaw-console-turn-notifications/`](qwenpaw-console-turn-notifications/) | `turn-notifications` | `0.1.0` | Native system notifications for completed console turns when the console is hidden or unfocused. |
+| [`qwenpaw-console-turn-notifications/`](qwenpaw-console-turn-notifications/) | `qwenpaw-console-turn-notifications` | `0.1.0` | Native **Windows** toast notifications for completed console turns. Windows only (v1). |
 
 The repository root contains shared licensing, ignore rules and release tooling. Plugin-specific implementation and instructions are in each plugin's README.
 
@@ -22,11 +22,11 @@ For example:
 qwenpaw plugin install qwenpaw-console-turn-notifications
 ```
 
-See the plugin's README for prerequisites, verification and uninstall steps. QwenPaw must remain running for backend hooks to operate; browser-based plugins also require an open console tab.
+See the plugin's README for prerequisites, verification and uninstall steps. QwenPaw must remain running for backend hooks to operate. Browser-based plugins also require an open console tab; the current plugin does not, because it raises a native Windows toast.
 
 ## Releases
 
-Each plugin has its own semantic version in its `plugin.json` and `CHANGELOG.md`. A release uses a plugin-specific tag, for example `turn-notifications-v0.1.0`.
+Each plugin has its own semantic version in its `plugin.json` and `CHANGELOG.md`. A release uses a plugin-specific tag, for example `qwenpaw-console-turn-notifications-v0.1.0`.
 
 Build a plugin archive locally:
 

@@ -1,61 +1,145 @@
 # -*- coding: utf-8 -*-
-"""Local browser notifications for completed console turns."""
+"""Native Windows toast notifications for completed console turns.
+
+Version 1 targets Windows only. It shows one fixed notification:
+
+    QwenPaw has completed the turn.
+
+There is no browser notification, no frontend entry, no SSE stream, and no
+storage of response content. The toast is produced by Windows itself through
+WinRT, so it appears even when no console tab is open.
+"""
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
-import uuid
-from typing import Any, AsyncIterator
+import sys
+from typing import Any
 
-from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter
 from qwenpaw.hooks.base import LifecycleHook
 from qwenpaw.runtime.hooks import HookContext, HookResult
 from qwenpaw.runtime.phases import Phase
 
 logger = logging.getLogger(__name__)
 
-PLUGIN_ID = "turn-notifications"
-COMPLETED_HOOK_NAME = "turn_notifications_completed"
-SUBSCRIBER_LIMIT = 32
+PLUGIN_ID = "qwenpaw-console-turn-notifications"
+COMPLETED_HOOK_NAME = "qwenpaw_console_turn_notification"
+
+# A stable AppUserModelId gives the toast its own identity ("QwenPaw") instead
+# of borrowing the name of whatever process happens to raise it.
+APP_USER_MODEL_ID = "QwenPaw.ConsoleTurnNotifications"
+APP_DISPLAY_NAME = "QwenPaw"
+TITLE = "QwenPaw"
+MESSAGE = "QwenPaw has completed the turn."
+
+# Windows may take a moment to cold-start PowerShell and WinRT.
+TOAST_TIMEOUT_SECONDS = 20.0
+
+_CREATE_NO_WINDOW = 0x08000000
+
+_TOAST_SCRIPT = """
+$ErrorActionPreference = 'Stop'
+$appId = '{app_id}'
+$key = 'HKCU:\\Software\\Classes\\AppUserModelId\\' + $appId
+if (-not (Test-Path $key)) {{
+    New-Item -Path $key -Force | Out-Null
+    Set-ItemProperty -Path $key -Name DisplayName -Value '{app_name}'
+}}
+[void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime]
+[void][Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType=WindowsRuntime]
+$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+$xml.LoadXml('{payload}')
+$toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
+[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appId).Show($toast)
+"""
 
 
 def completion_event(ctx: HookContext) -> dict[str, Any] | None:
-    """Signal a successful console turn without reading its response."""
+    """Return the fixed notification payload, or None for other turns."""
     if ctx.error is not None:
         return None
     if getattr(ctx.request, "channel", None) != "console":
         return None
-    return {"message": "QwenPaw has completed the turn."}
+    return {"title": TITLE, "message": MESSAGE}
 
 
-class CompletionStore:
-    """Fan out completion signals; no response content or history is kept."""
+def toast_xml(title: str = TITLE, message: str = MESSAGE) -> str:
+    """Build generic toast XML, escaping the dynamic text."""
+    def escape(value: str) -> str:
+        return (
+            value.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&apos;")
+        )
 
-    def __init__(self) -> None:
-        self._subscribers: set[asyncio.Queue] = set()
-        self.latest_sequence = 0
+    return (
+        "<toast><visual><binding template=\"ToastGeneric\">"
+        f"<text>{escape(title)}</text>"
+        f"<text>{escape(message)}</text>"
+        "</binding></visual></toast>"
+    )
 
-    def publish(self) -> None:
-        self.latest_sequence += 1
-        for queue in tuple(self._subscribers):
-            try:
-                queue.put_nowait(None)
-            except asyncio.QueueFull:
-                pass
 
-    def subscribe(self) -> asyncio.Queue:
-        # Concurrent streaming responses share QwenPaw's single event loop,
-        # so the limit check and insertion cannot interleave.
-        if len(self._subscribers) >= SUBSCRIBER_LIMIT:
-            raise RuntimeError("Too many notification streams")
-        queue: asyncio.Queue = asyncio.Queue(maxsize=128)
-        self._subscribers.add(queue)
-        return queue
+def build_powershell_command(
+    title: str = TITLE,
+    message: str = MESSAGE,
+) -> list[str]:
+    """Build a self-contained, quoting-safe PowerShell invocation."""
+    payload = toast_xml(title, message).replace("'", "''")
+    script = _TOAST_SCRIPT.format(
+        app_id=APP_USER_MODEL_ID,
+        app_name=APP_DISPLAY_NAME.replace("'", "''"),
+        payload=payload,
+    )
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    return [
+        "powershell.exe",
+        "-NoProfile",
+        "-NonInteractive",
+        "-WindowStyle",
+        "Hidden",
+        "-EncodedCommand",
+        encoded,
+    ]
 
-    def unsubscribe(self, queue: asyncio.Queue) -> None:
-        self._subscribers.discard(queue)
+
+def notifications_supported() -> bool:
+    """Version 1 supports Windows only."""
+    return sys.platform == "win32"
+
+
+async def show_toast(title: str = TITLE, message: str = MESSAGE) -> bool:
+    """Raise a native Windows toast. Never raises for notification failures."""
+    if not notifications_supported():
+        logger.info("Turn notifications v1 supports Windows only; toast skipped")
+        return False
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *build_powershell_command(title, message),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+            creationflags=_CREATE_NO_WINDOW,
+        )
+        _, stderr = await asyncio.wait_for(
+            process.communicate(),
+            timeout=TOAST_TIMEOUT_SECONDS,
+        )
+        if process.returncode != 0:
+            logger.warning(
+                "Turn notification toast failed (exit %s): %s",
+                process.returncode,
+                stderr.decode("utf-8", "replace").strip()[:500],
+            )
+            return False
+        return True
+    except (OSError, asyncio.TimeoutError) as exc:
+        logger.warning("Turn notification toast could not be shown: %s", exc)
+        return False
 
 
 def remove_stale_runtime_hooks(workspace_info: dict | None = None) -> int:
@@ -63,11 +147,12 @@ def remove_stale_runtime_hooks(workspace_info: dict | None = None) -> int:
 
     QwenPaw 2.2.2.post1 does not unregister runtime hooks from existing
     workspaces when unloading a plugin. Duplicate names break its current
-    topological sorter, so cleanup must be both forward and backward
-    compatible with installations made before this guard existed.
+    topological sorter, so cleanup must accept both the old and new names
+    from installations made before the rename.
     """
     from qwenpaw.plugins.registry import PluginRegistry
 
+    stale = {COMPLETED_HOOK_NAME, "turn_notifications_completed"}
     if workspace_info is not None and workspace_info.get("workspace") is not None:
         workspaces = [workspace_info["workspace"]]
     else:
@@ -85,7 +170,7 @@ def remove_stale_runtime_hooks(workspace_info: dict | None = None) -> int:
         for phase, hooks in list(phases.items()):
             retained = [
                 hook for hook in hooks
-                if getattr(hook, "name", None) != COMPLETED_HOOK_NAME
+                if getattr(hook, "name", None) not in stale
             ]
             removed += len(hooks) - len(retained)
             if retained:
@@ -100,64 +185,23 @@ def remove_stale_runtime_hooks(workspace_info: dict | None = None) -> int:
 
 
 class TurnNotificationsPlugin:
-    """Publish successful console completions to open console tabs."""
-
-    def __init__(self, *, keepalive_seconds: float = 15) -> None:
-        self.store = CompletionStore()
-        self.keepalive_seconds = keepalive_seconds
-        self.stream_id = uuid.uuid4().hex
+    """Show a native Windows toast when a console turn completes."""
 
     def _router(self) -> APIRouter:
         router = APIRouter()
-
-        @router.get("/events")
-        async def events(request: Request) -> StreamingResponse:
-            return await self._events(request)
 
         @router.get("/health")
         async def health() -> dict[str, Any]:
             return {
                 "ok": True,
                 "plugin": PLUGIN_ID,
-                "latest_sequence": self.store.latest_sequence,
-                "stream_id": self.stream_id,
+                "platform_supported": notifications_supported(),
+                "message": MESSAGE,
             }
 
         return router
 
-    async def _events(self, request: Request) -> StreamingResponse:
-        queue = self.store.subscribe()
-
-        async def stream() -> AsyncIterator[bytes]:
-            try:
-                yield b"retry: 3000\nevent: stream.ready\ndata: {}\n\n"
-                while True:
-                    if await request.is_disconnected():
-                        break
-                    try:
-                        await asyncio.wait_for(
-                            queue.get(),
-                            timeout=self.keepalive_seconds,
-                        )
-                    except TimeoutError:
-                        yield b": keep-alive\n\n"
-                        continue
-                    yield b"event: turn.completed\ndata: {}\n\n"
-            finally:
-                self.store.unsubscribe(queue)
-
-        return StreamingResponse(
-            stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache, no-transform",
-                "X-Accel-Buffering": "no",
-                "X-Stream-Id": self.stream_id,
-            },
-        )
-
     def register(self, api: Any) -> None:
-        plugin = self
         # Hot unload cannot invoke a cleanup callback that the previous
         # version did not have. Clear that version's stale hooks now, before
         # the subsequent workspace-replacement hooks are registered.
@@ -170,9 +214,8 @@ class TurnNotificationsPlugin:
 
             async def run(self, ctx: HookContext) -> HookResult:
                 try:
-                    event = completion_event(ctx)
-                    if event is not None:
-                        plugin.store.publish()
+                    if completion_event(ctx) is not None:
+                        await show_toast()
                 except Exception:  # Never turn a notification into a failed turn.
                     logger.warning(
                         "Turn notification could not be published",
@@ -184,16 +227,16 @@ class TurnNotificationsPlugin:
         # repairs duplicates from older hot installs; future shutdowns also
         # remove the hook through the callback registered below.
         api.register_startup_hook(
-            "turn_notifications_runtime_cleanup",
+            "qwenpaw_console_turn_notification_cleanup",
             remove_stale_runtime_hooks,
             priority=64,
         )
         api.register_shutdown_hook(
-            "turn_notifications_runtime_cleanup",
+            "qwenpaw_console_turn_notification_cleanup",
             remove_stale_runtime_hooks,
         )
         api.register_workspace_created_hook(
-            "turn_notifications_workspace_cleanup",
+            "qwenpaw_console_turn_notification_workspace_cleanup",
             remove_stale_runtime_hooks,
             priority=64,
             reload_safe=True,
@@ -204,15 +247,20 @@ class TurnNotificationsPlugin:
             prefix="/turn-notifications",
             tags=["turn-notifications"],
         )
-        logger.info("Turn notifications registered; response data stays in memory")
+        logger.info(
+            "Console turn notifications registered (native Windows toast, v1)"
+        )
 
 
 plugin = TurnNotificationsPlugin()
 
 __all__ = [
-    "CompletionStore",
     "TurnNotificationsPlugin",
+    "build_powershell_command",
     "completion_event",
+    "notifications_supported",
     "remove_stale_runtime_hooks",
+    "show_toast",
+    "toast_xml",
     "plugin",
 ]

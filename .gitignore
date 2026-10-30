@@ -20,5 +20,8 @@ Thumbs.db
 # Local verification output
 verification/
 
+# Local scratch space — never commit screenshots or review artefacts
+tmp/
+
 # Plugin release archives
 dist/
