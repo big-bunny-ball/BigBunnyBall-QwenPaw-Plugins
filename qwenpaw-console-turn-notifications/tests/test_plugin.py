@@ -150,6 +150,18 @@ class ManifestTests(unittest.TestCase):
         self.assertIn("Windows only", MANIFEST["description"])
         self.assertIn("仅支持 Windows", MANIFEST["description"])
 
+    def test_declared_type_is_hook(self):
+        """The plugin runs lifecycle hooks, so its type must be ``hook``.
+
+        ``general`` is the fallback for plugins that match no category, which
+        would mislabel this plugin in the marketplace and in the plugin list.
+        """
+        from qwenpaw.plugins.architecture import PluginManifest, PluginType
+
+        manifest = PluginManifest.from_dict(MANIFEST)
+        self.assertEqual(manifest.plugin_type, PluginType.HOOK)
+        self.assertNotEqual(manifest.plugin_type, PluginType.GENERAL)
+
     def test_no_browser_frontend_is_shipped(self):
         self.assertFalse((PLUGIN_DIR / "web").exists())
         self.assertFalse(any(PLUGIN_DIR.rglob("*.js")))
@@ -282,6 +294,84 @@ class LifecycleTests(unittest.TestCase):
         ), self.assertLogs(backend.logger, level="WARNING"):
             result = asyncio.run(hook.run(context()))
         self.assertIsInstance(result, HookResult)
+
+    def test_no_global_shutdown_hook_is_registered(self):
+        """Regression: a global shutdown cleanup stripped the live hook.
+
+        Removing hooks from every workspace at shutdown left the running
+        workspace without its POST_RESPONSE hook, so later turns were silent.
+        Cleanup must only happen at startup and for a newly created workspace.
+        """
+        self.register()
+        shutdown = self.registry.get_shutdown_hooks()
+        self.assertEqual(
+            [hook for hook in shutdown if hook.plugin_id == MANIFEST["id"]],
+            [],
+        )
+
+    def test_startup_sequence_registers_exactly_one_hook(self):
+        """Regression: startup cleanup must not add a hook of its own.
+
+        ``register_runtime_hook`` installs the hook from a priority-65 startup
+        callback. The plugin's own cleanup runs at priority 64, so if it adds
+        a hook as well, two identically named hooks exist. QwenPaw's
+        ``_topo_sort`` keys hooks by name, so duplicates raise
+        ``HookCycleError`` on the next turn.
+        """
+        self.register()
+
+        lifecycle = sorted(
+            self.registry.get_startup_hooks() + self.registry.get_workspace_created_hooks(),
+            key=lambda hook: hook.priority,
+        )
+        workspace = self.workspace()
+        for hook in lifecycle:
+            try:
+                hook.callback({"workspace": workspace})
+            except TypeError:
+                hook.callback()
+
+        hooks = workspace.plugins.hook_registry.hooks_for(Phase.POST_RESPONSE)
+        self.assertEqual(
+            [hook.name for hook in hooks],
+            [backend.COMPLETED_HOOK_NAME],
+            "exactly one hook is required; duplicates raise HookCycleError",
+        )
+        self.assertEqual(backend.count_hooks(workspace), 1)
+
+    def test_duplicate_hooks_are_collapsed_not_multiplied(self):
+        """A manual repair must reduce duplicates to one, never increase them."""
+        workspace = self.workspace()
+        for _ in range(3):
+            workspace.plugins.hook_registry.register(backend.CompletedTurnHook())
+        self.assertEqual(backend.count_hooks(workspace), 3)
+
+        self.registry.set_workspace_manager(
+            SimpleNamespace(agents={"default": workspace})
+        )
+        status = backend.ensure_hook_installed()
+
+        self.assertEqual(status, {"default": 1})
+        self.assertEqual(backend.count_hooks(workspace), 1)
+
+    def test_missing_hook_is_restored(self):
+        """A replaced workspace instance can drop the hook; restore it."""
+        workspace = self.workspace()
+        self.registry.set_workspace_manager(
+            SimpleNamespace(agents={"default": workspace})
+        )
+        self.assertFalse(backend.hook_present(workspace))
+
+        status = backend.ensure_hook_installed()
+        self.assertEqual(status, {"default": 1})
+        self.assertTrue(backend.hook_present(workspace))
+
+        # Idempotent: a second pass must not add a duplicate.
+        backend.ensure_hook_installed()
+        hooks = workspace.plugins.hook_registry.hooks_for(Phase.POST_RESPONSE)
+        self.assertEqual(
+            [hook.name for hook in hooks], [backend.COMPLETED_HOOK_NAME]
+        )
 
 
 if __name__ == "__main__":

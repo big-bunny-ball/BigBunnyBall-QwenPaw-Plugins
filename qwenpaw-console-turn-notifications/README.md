@@ -78,6 +78,10 @@ The plugin uses QwenPaw's `POST_RESPONSE` lifecycle hook. Only successful consol
 
 插件使用 QwenPaw 的 `POST_RESPONSE` 生命周期钩子。只有成功完成的控制台对话才会通知；其他渠道以及以错误结束的对话不会通知。
 
+It is registered as a **Lifecycle Hook** plugin (`"type": "hook"`), because lifecycle hooks are its only mechanism.
+
+该插件的类型注册为 **Lifecycle Hook**（`"type": "hook"`），因为生命周期钩子是其唯一的实现机制。
+
 Each completed turn shows one toast. The toast is raised through Windows WinRT using a dedicated application identity, so it is labelled **QwenPaw** rather than another program.
 
 每完成一轮对话会显示一条通知。通知通过 Windows WinRT 以专属应用标识发出，因此显示为 **QwenPaw**，而不是其他程序的名称。
