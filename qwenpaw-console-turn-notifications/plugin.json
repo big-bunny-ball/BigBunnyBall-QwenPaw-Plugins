@@ -1,0 +1,18 @@
+{
+  "id": "turn-notifications",
+  "name": "Turn Notifications",
+  "version": "0.1.0",
+  "type": "general",
+  "description": "Native system notifications for completed QwenPaw console turns. Fixed text: “QwenPaw has completed the turn.”\n\nQwenPaw 控制台对话完成时显示原生系统通知。固定通知文本：“QwenPaw has completed the turn.”",
+  "author": "BigBunnyBall大兔子球",
+  "license": "Apache-2.0",
+  "entry": {
+    "backend": "plugin.py",
+    "frontend": "web/index.js"
+  },
+  "dependencies": [],
+  "qwenpaw_version": {
+    "min": "2.2.2",
+    "max": "2.3.0"
+  }
+}
