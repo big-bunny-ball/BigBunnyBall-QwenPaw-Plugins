@@ -162,6 +162,31 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(manifest.plugin_type, PluginType.HOOK)
         self.assertNotEqual(manifest.plugin_type, PluginType.GENERAL)
 
+    def test_compatibility_is_declared_in_both_shapes(self):
+        """The flat and structured version fields must agree.
+
+        ``PluginManifest.min_version`` defaults to ``"0.1.0"`` when absent.
+        ``download_catalog`` and ``loader`` read the structured
+        ``qwenpaw_version`` first but fall back to the flat
+        ``min_version`` / ``max_version`` fields, so a manifest carrying only
+        the structured form advertises the wrong minimum to any consumer that
+        reads the flat fields.
+        """
+        from qwenpaw.plugins.architecture import PluginManifest
+
+        self.assertEqual(MANIFEST["min_version"], "2.2.2")
+        self.assertEqual(MANIFEST["max_version"], "2.3.0")
+        self.assertEqual(MANIFEST["qwenpaw_version"]["min"], MANIFEST["min_version"])
+        self.assertEqual(MANIFEST["qwenpaw_version"]["max"], MANIFEST["max_version"])
+
+        manifest = PluginManifest.from_dict(MANIFEST)
+        self.assertEqual(manifest.min_version, "2.2.2")
+        self.assertNotEqual(
+            manifest.min_version,
+            "0.1.0",
+            "the implicit default would advertise QwenPaw 0.1 compatibility",
+        )
+
     def test_no_browser_frontend_is_shipped(self):
         self.assertFalse((PLUGIN_DIR / "web").exists())
         self.assertFalse(any(PLUGIN_DIR.rglob("*.js")))
