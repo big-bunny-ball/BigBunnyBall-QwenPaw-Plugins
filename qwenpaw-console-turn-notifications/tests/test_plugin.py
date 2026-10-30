@@ -147,8 +147,15 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(MANIFEST["author"], "BigBunnyBall大兔子球")
         self.assertEqual(set(MANIFEST["entry"]), {"backend"})
         self.assertEqual(MANIFEST["entry"]["backend"], "plugin.py")
-        self.assertIn("Windows only", MANIFEST["description"])
-        self.assertIn("仅支持 Windows", MANIFEST["description"])
+
+        # Windows-only scope must be stated in both languages, without
+        # pinning an exact phrase that copy edits would invalidate.
+        description = MANIFEST["description"].lower()
+        self.assertIn("windows 10/11 only", description)
+        self.assertIn("仅支持 windows", MANIFEST["description"].lower())
+        self.assertIn("macos and linux", description)
+        self.assertIn("2.2.2", MANIFEST["description"])
+        self.assertLessEqual(len(MANIFEST["description"]), 2000)
 
     def test_declared_type_is_hook(self):
         """The plugin runs lifecycle hooks, so its type must be ``hook``.
